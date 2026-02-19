@@ -106,4 +106,4 @@ async def on_member_update(before, after):
 
 
 keep_alive()
-bot.run(os.getenv('DISCORD_TOKEN'))
+bot.run('MTQ3Mzc1Nzk0MzQ3OTQwMjc3Nw.GipTpP.dTccr3tljkyaX-bCKdvFsbPo1dfDwpXauS1wko')

@@ -74,47 +74,56 @@ ROLE_STYLES = {
 }
 
 # --- 5. LOGIC ---
+# --- HELPER FUNCTION ---
+# This does the heavy lifting of checking roles and applying fonts
+async def sync_member_nick(member):
+    # Use Global Display Name as the "Reset" base, fallback to username
+    base_name = member.global_name if member.global_name else member.name
+    
+    # Check roles from highest to lowest
+    for role in reversed(member.roles):
+        if role.name in ROLE_STYLES:
+            style = ROLE_STYLES[role.name]
+            
+            # Apply font to the clean base name
+            new_name = style["transform"](base_name) if style.get("transform") else base_name
+            prefix = style.get("prefix", "")
+            final_nick = f"{prefix}{new_name}"[:32]
+
+            # Only edit if the nickname is actually different
+            if member.nick != final_nick:
+                try:
+                    await member.edit(nick=final_nick)
+                    print(f"Synced {member.name}'s nick to: {final_nick}")
+                except discord.Forbidden:
+                    print(f"Failed to rename {member.name}. Hierarchy issue!")
+            return 
+
+    # If no styled roles found, reset to default (None)
+    if member.nick is not None:
+        try:
+            await member.edit(nick=None)
+        except discord.Forbidden:
+            pass
+
+# --- EVENTS ---
 
 @bot.event
 async def on_member_update(before, after):
-    # Only trigger if roles were added or removed
+    # Triggered when roles change or nicknames are manually changed
     if before.roles != after.roles:
-        
-        # 1. Get the "Clean" base name. 
-        # We use global_name (Display Name) first, then fallback to username.
-        # This ignores the current 'Nickname' which might already have a font.
-        base_name = after.global_name if after.global_name else after.name
-        
-        # 2. Check roles from highest to lowest
-        for role in reversed(after.roles):
-            if role.name in ROLE_STYLES:
-                style = ROLE_STYLES[role.name]
-                
-                # 3. Apply font to the clean base name
-                if style.get("transform"):
-                    new_name = style["transform"](base_name)
-                else:
-                    new_name = base_name
-                
-                # 4. Add decoration
-                prefix = style.get("prefix", "")
-                final_nick = f"{prefix}{new_name}"[:32]
+        await sync_member_nick(after)
 
-                # 5. Apply the change
-                if after.nick != final_nick:
-                    try:
-                        await after.edit(nick=final_nick)
-                        print(f"Updated {after.name} using Display Name: {base_name}")
-                    except discord.Forbidden:
-                        print(f"Forbidden: Bot cannot rename {after.name}")
-                return 
+@bot.event
+async def on_user_update(before, after):
+    # Triggered when a user changes their Global Display Name or Avatar
+    # Since 'after' here is a User object, we need to find them in your server
+    for guild in bot.guilds:
+        member = guild.get_member(after.id)
+        if member:
+            await sync_member_nick(member)
 
-        # 6. Reset to None (original Display Name) if no styled roles remain
-        if after.nick is not None:
-            try:
-                await after.edit(nick=None)
-            except discord.Forbidden:
-                pass
+
 # --- 6. RUN ---
 if __name__ == "__main__":
     keep_alive()

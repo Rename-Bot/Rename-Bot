@@ -77,9 +77,15 @@ ROLE_STYLES = {
 
 @bot.event
 async def on_member_update(before, after):
+    # This will print in Render logs every time someone's profile changes
+    print(f"Update detected for {after.name}") 
+
     if before.roles != after.roles:
+        print(f"Role change detected for {after.name}")
+        
         for role in reversed(after.roles):
             if role.name in ROLE_STYLES:
+                print(f"Matching role found: {role.name}")
                 style = ROLE_STYLES[role.name]
                 base_name = after.display_name
                 
@@ -90,10 +96,10 @@ async def on_member_update(before, after):
                 if after.nick != final_nick:
                     try:
                         await after.edit(nick=final_nick)
+                        print(f"Successfully renamed {after.name} to {final_nick}")
                     except discord.Forbidden:
-                        pass
+                        print(f"ERROR: Bot lacks permission to rename {after.name}. Check hierarchy!")
                 break
-
 # --- 6. RUN ---
 if __name__ == "__main__":
     keep_alive()

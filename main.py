@@ -23,6 +23,15 @@ def keep_alive():
 intents = discord.Intents.default()
 intents.members = True 
 bot = commands.Bot(command_prefix="!", intents=intents)
+@bot.event
+async def on_ready():
+    # This syncs the slash commands to your server
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(e)
+    print(f"Logged in as {bot.user.name}")
 
 # --- 3. FONT TRANSFORMERS ---
 

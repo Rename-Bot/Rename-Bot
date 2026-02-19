@@ -42,7 +42,7 @@ def to_medieval(text):
 def to_antique(text):
     mapping = str.maketrans(
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-        "αвcᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢαвcᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
+        "𝓐𝓑𝓒𝓓𝓔𝓕𝓖𝓗𝓘𝓙𝓚𝓛𝓜𝓝𝓞𝓟𝓠𝓡𝓢𝓣𝓤𝓥𝓦𝓧𝓨𝓩𝓪𝓫𝓬𝓭𝓮𝓯𝓰𝓱𝓲𝓳𝓴𝓵𝓶𝓷𝓸𝓹𝓺𝓻𝓼𝓽𝓾𝓿𝔀𝔁𝔂𝔃"
     )
     return text.translate(mapping)
 
@@ -65,7 +65,7 @@ def to_circled(text):
 ROLE_STYLES = {
     "OWNER": {"prefix": "👑 ", "transform": to_medieval},
     "MC PLAYER": {"transform": to_antique},
-    "IRON": {"transform": to_asian_style},
+    "IRON": {"prefix": "🧲","transform": to_asian_style},
     "DIAMOND": {"prefix": "💎 ", "transform": to_circled},
     "NETHERITE": {"prefix": "🔥 ", "transform": to_monospace},
     "SUS": {"prefix": "ඞ ", "transform": None},
@@ -80,43 +80,42 @@ async def on_member_update(before, after):
     # Only trigger if roles were added or removed
     if before.roles != after.roles:
         
-        # 1. Start with a "Clean" name (the actual Discord account name)
-        # This effectively 'resets' any previous nickname the bot gave them.
-        base_name = after.name 
+        # 1. Get the "Clean" base name. 
+        # We use global_name (Display Name) first, then fallback to username.
+        # This ignores the current 'Nickname' which might already have a font.
+        base_name = after.global_name if after.global_name else after.name
         
-        # 2. Find the highest role that has a style defined
+        # 2. Check roles from highest to lowest
         for role in reversed(after.roles):
             if role.name in ROLE_STYLES:
                 style = ROLE_STYLES[role.name]
                 
-                # 3. Apply the font transformation to the clean base name
+                # 3. Apply font to the clean base name
                 if style.get("transform"):
                     new_name = style["transform"](base_name)
                 else:
                     new_name = base_name
                 
-                # 4. Add the emoji/prefix
+                # 4. Add decoration
                 prefix = style.get("prefix", "")
-                final_nick = f"{prefix}{new_name}"[:32] # Keep under 32 chars
+                final_nick = f"{prefix}{new_name}"[:32]
 
-                # 5. Update the user
+                # 5. Apply the change
                 if after.nick != final_nick:
                     try:
                         await after.edit(nick=final_nick)
-                        print(f"Reseting and updating: {after.name} -> {final_nick}")
+                        print(f"Updated {after.name} using Display Name: {base_name}")
                     except discord.Forbidden:
-                        print(f"Failed to rename {after.name}. Hierarchy issue!")
-                
-                # Stop looking once the highest matching role is found
+                        print(f"Forbidden: Bot cannot rename {after.name}")
                 return 
 
-        # 6. If NO roles match, reset their nickname to None (original name)
+        # 6. Reset to None (original Display Name) if no styled roles remain
         if after.nick is not None:
             try:
                 await after.edit(nick=None)
-                print(f"Resetting {after.name} to default because they have no styled roles.")
             except discord.Forbidden:
-                pass# --- 6. RUN ---
+                pass
+# --- 6. RUN ---
 if __name__ == "__main__":
     keep_alive()
     # It will look for your token in Render's Environment Variables

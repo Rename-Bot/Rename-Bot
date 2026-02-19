@@ -77,30 +77,46 @@ ROLE_STYLES = {
 
 @bot.event
 async def on_member_update(before, after):
-    # This will print in Render logs every time someone's profile changes
-    print(f"Update detected for {after.name}") 
-
+    # Only trigger if roles were added or removed
     if before.roles != after.roles:
-        print(f"Role change detected for {after.name}")
         
+        # 1. Start with a "Clean" name (the actual Discord account name)
+        # This effectively 'resets' any previous nickname the bot gave them.
+        base_name = after.name 
+        
+        # 2. Find the highest role that has a style defined
         for role in reversed(after.roles):
             if role.name in ROLE_STYLES:
-                print(f"Matching role found: {role.name}")
                 style = ROLE_STYLES[role.name]
-                base_name = after.display_name
                 
-                new_nick = style["transform"](base_name) if style.get("transform") else base_name
+                # 3. Apply the font transformation to the clean base name
+                if style.get("transform"):
+                    new_name = style["transform"](base_name)
+                else:
+                    new_name = base_name
+                
+                # 4. Add the emoji/prefix
                 prefix = style.get("prefix", "")
-                final_nick = f"{prefix}{new_nick}"[:32]
+                final_nick = f"{prefix}{new_name}"[:32] # Keep under 32 chars
 
+                # 5. Update the user
                 if after.nick != final_nick:
                     try:
                         await after.edit(nick=final_nick)
-                        print(f"Successfully renamed {after.name} to {final_nick}")
+                        print(f"Reseting and updating: {after.name} -> {final_nick}")
                     except discord.Forbidden:
-                        print(f"ERROR: Bot lacks permission to rename {after.name}. Check hierarchy!")
-                break
-# --- 6. RUN ---
+                        print(f"Failed to rename {after.name}. Hierarchy issue!")
+                
+                # Stop looking once the highest matching role is found
+                return 
+
+        # 6. If NO roles match, reset their nickname to None (original name)
+        if after.nick is not None:
+            try:
+                await after.edit(nick=None)
+                print(f"Resetting {after.name} to default because they have no styled roles.")
+            except discord.Forbidden:
+                pass# --- 6. RUN ---
 if __name__ == "__main__":
     keep_alive()
     # It will look for your token in Render's Environment Variables

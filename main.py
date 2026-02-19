@@ -4,6 +4,7 @@ from flask import Flask
 from threading import Thread
 import os
 import asyncio
+from discord import app_commands
 
 # --- 1. WEB SERVER FOR RENDER/UPTIMEROBOT ---
 app = Flask('')
@@ -126,58 +127,59 @@ async def sync_member_nick(member):
 
 
 
+
+
+# --- HELPER: PROGRESS BAR ---
+def make_progress_bar(current, total):
+    size = 10
+    filled = int((current / total) * size)
+    bar = "🟩" * filled + "⬜" * (size - filled)
+    percent = int((current / total) * 100)
+    return f"[{bar}] {percent}% ({current}/{total})"
+
 # --- 6. SLASH COMMANDS ---
 
-@bot.tree.command(name="syncall", description="Safely update all member nicknames (1.5s delay)")
+@bot.tree.command(name="syncall", description="Safely update all member nicknames with a progress bar")
 async def syncall(interaction: discord.Interaction):
-    # Check for Admin permissions
-    if not interaction.user.guild_permissions.administrator:
-        return await interaction.response.send_message("❌ You need Administrator permissions to use this!", ephemeral=True)
-
-    # Tell Discord to wait while we loop (avoids "interaction failed")
-    await interaction.response.defer(ephemeral=True)
-    
-    await interaction.followup.send("🔄 Starting safe sync. I will notify you here when finished.")
-    
-    count = 0
-    members = interaction.guild.members
-    total = len([m for m in members if not m.bot])
-
-    for member in members:
-        if member.bot: continue
-        
-        await sync_member_nick(member)
-        count += 1
-        
-        # Log progress every 10 members
-        if count % 10 == 0:
-            print(f"Sync Progress: {count}/{total}")
-        
-        # The safety breather
-        await asyncio.sleep(1.5) 
-
-    await interaction.followup.send(f"✅ Finished! Successfully synced **{count}** members.")
-
-@bot.tree.command(name="clearall", description="Reset everyone to their original display names")
-async def clearall(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.administrator:
         return await interaction.response.send_message("❌ Admin only!", ephemeral=True)
 
     await interaction.response.defer(ephemeral=True)
-    await interaction.followup.send("🧹 Clearing all nicknames safely...")
+    
+    # Get list of non-bot members
+    members = [m for m in interaction.guild.members if not m.bot]
+    total = len(members)
+    
+    if total == 0:
+        return await interaction.followup.send("No members found to sync. Check your Intents!")
+
+    message = await interaction.followup.send(f"🔄 **Starting Sync...**\n{make_progress_bar(0, total)}")
     
     count = 0
-    for member in interaction.guild.members:
-        if member.nick is not None:
-            try:
-                await member.edit(nick=None)
-                count += 1
-                await asyncio.sleep(1.5)
-            except discord.Forbidden:
-                continue
-                
-    await interaction.followup.send(f"✅ Cleaned up **{count}** nicknames.")
+    for member in members:
+        await sync_member_nick(member)
+        count += 1
+        
+        # Update the progress bar every 5 members to avoid Discord rate limits
+        if count % 5 == 0 or count == total:
+            await message.edit(content=f"🔄 **Syncing Server...**\n{make_progress_bar(count, total)}")
+        
+        await asyncio.sleep(1.5) 
 
+    await message.edit(content=f"✅ **Sync Complete!**\n{make_progress_bar(total, total)}\nUpdated {total} members.")
+
+# --- 7. THE FIX: RELIABLE SYNCING ---
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user.name}")
+    try:
+        # This force-syncs commands to the current server for instant results
+        # Replace 'YOUR_SERVER_ID' with your actual server ID if it still doesn't show
+        synced = await bot.tree.sync()
+        print(f"Successfully synced {len(synced)} slash commands.")
+    except Exception as e:
+        print(f"Error syncing commands: {e}")
 
 # --- EVENTS ---
 
